@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QListWidget, QPushButton,
-    QLabel, QLineEdit, QDialogButtonBox, QMessageBox
+    QLabel, QLineEdit, QDialogButtonBox, QMessageBox, QTableWidget,
+    QTableWidgetItem, QHeaderView
 )
 from PyQt5.QtCore import Qt
 
@@ -85,3 +86,44 @@ class SecuritiesEditorDialog(QDialog):
 
     def get_symbols(self) -> list:
         return [self.list_widget.item(i).text() for i in range(self.list_widget.count())]
+
+
+class AliasEditorDialog(QDialog):
+    def __init__(self, parent=None, all_symbols: list = None, aliases: dict = None):
+        super().__init__(parent)
+        self.setWindowTitle("Symbol Aliases")
+        self.setMinimumSize(400, 420)
+
+        all_symbols = sorted(all_symbols or [])
+        aliases = aliases or {}
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("Set a display name for each symbol (leave blank to use the ticker):"))
+
+        self.table = QTableWidget(len(all_symbols), 2)
+        self.table.setHorizontalHeaderLabels(["Symbol", "Display Name"])
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table.verticalHeader().setVisible(False)
+
+        for row, sym in enumerate(all_symbols):
+            sym_item = QTableWidgetItem(sym)
+            sym_item.setFlags(sym_item.flags() & ~Qt.ItemIsEditable)
+            self.table.setItem(row, 0, sym_item)
+            self.table.setItem(row, 1, QTableWidgetItem(aliases.get(sym, "")))
+
+        layout.addWidget(self.table)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def get_aliases(self) -> dict:
+        result = {}
+        for row in range(self.table.rowCount()):
+            sym = self.table.item(row, 0).text()
+            name = self.table.item(row, 1).text().strip()
+            if name:
+                result[sym] = name
+        return result

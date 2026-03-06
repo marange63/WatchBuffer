@@ -3,14 +3,15 @@ from datetime import datetime
 
 from PyQt5.QtWidgets import (
     QMainWindow, QToolBar, QAction, QScrollArea, QWidget,
-    QHBoxLayout, QLabel
+    QHBoxLayout, QVBoxLayout, QLabel
 )
 from PyQt5.QtCore import Qt
 
 import persistence
 from data_fetcher import DataFetcher
-from dialogs import PaneNameDialog
+from dialogs import PaneNameDialog, AliasEditorDialog
 from pane_widget import WatchPane
+from market_bar import MarketBar, BENCHMARK_SYMBOLS
 
 
 class MainWindow(QMainWindow):
@@ -21,12 +22,15 @@ class MainWindow(QMainWindow):
 
         self._panes = []
         self._fetcher = None
+        self._aliases = {}
 
         self._build_toolbar()
         self._build_central()
         self._build_statusbar()
 
         self._load_panes()
+        self._aliases = persistence.load_aliases()
+        self._apply_aliases()
         self._restart_fetcher()
 
     def _build_toolbar(self):
@@ -35,8 +39,13 @@ class MainWindow(QMainWindow):
         add_action = QAction("+ Add Pane", self)
         add_action.triggered.connect(self._add_pane)
         tb.addAction(add_action)
+        alias_action = QAction("Aliases", self)
+        alias_action.triggered.connect(self._edit_aliases)
+        tb.addAction(alias_action)
 
     def _build_central(self):
+        self._market_bar = MarketBar()
+
         self._scroll = QScrollArea()
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
@@ -49,7 +58,14 @@ class MainWindow(QMainWindow):
         self._layout.setSpacing(8)
 
         self._scroll.setWidget(self._container)
-        self.setCentralWidget(self._scroll)
+
+        central = QWidget()
+        vbox = QVBoxLayout(central)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(0)
+        vbox.addWidget(self._market_bar)
+        vbox.addWidget(self._scroll)
+        self.setCentralWidget(central)
 
     def _build_statusbar(self):
         self._status_label = QLabel("No data yet")
@@ -65,6 +81,7 @@ class MainWindow(QMainWindow):
         pane.symbols_changed.connect(self._on_symbols_changed)
         self._panes.append(pane)
         self._layout.addWidget(pane)
+        pane.update_aliases(self._aliases)
         if save:
             self._save()
 
@@ -95,6 +112,9 @@ class MainWindow(QMainWindow):
     def _all_symbols(self):
         seen = set()
         result = []
+        for sym in BENCHMARK_SYMBOLS:
+            seen.add(sym)
+            result.append(sym)
         for p in self._panes:
             for sym in p.symbols:
                 upper = sym.upper()
@@ -103,16 +123,48 @@ class MainWindow(QMainWindow):
                     result.append(upper)
         return result
 
+    def _all_known_symbols(self):
+        seen = set()
+        result = []
+        for sym in BENCHMARK_SYMBOLS:
+            seen.add(sym)
+            result.append(sym)
+        for p in self._panes:
+            for sym in p.symbols:
+                upper = sym.upper()
+                if upper not in seen:
+                    seen.add(upper)
+                    result.append(upper)
+        return result
+
+    def _apply_aliases(self):
+        self._market_bar.set_aliases(self._aliases)
+        for pane in self._panes:
+            pane.update_aliases(self._aliases)
+
+    def _edit_aliases(self):
+        dlg = AliasEditorDialog(self, self._all_known_symbols(), self._aliases)
+        if dlg.exec_() != dlg.Accepted:
+            return
+        self._aliases = dlg.get_aliases()
+        persistence.save_aliases(self._aliases)
+        self._apply_aliases()
+        for pane in self._panes:
+            if hasattr(pane, '_last_data'):
+                pane.update_chart(pane._last_data)
+
     def _restart_fetcher(self):
         if self._fetcher is not None:
             self._fetcher.stop()
             self._fetcher.wait(3000)
-        self._fetcher = DataFetcher(self._all_symbols(), interval=60)
+        self._fetcher = DataFetcher(self._all_known_symbols(), interval=60)
         self._fetcher.data_ready.connect(self.on_data_ready)
         self._fetcher.start()
 
     def on_data_ready(self, data):
+        self._market_bar.refresh(data)
         for pane in self._panes:
+            pane._last_data = data
             pane.update_chart(data)
         ts = datetime.now().strftime("%H:%M:%S")
         self._status_label.setText(f"Last update: {ts}  |  {len(data)} symbols loaded")

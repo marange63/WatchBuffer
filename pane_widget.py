@@ -21,6 +21,7 @@ class WatchPane(QFrame):
         self.pane_id = pane_id
         self.pane_name = name
         self.symbols = list(symbols)
+        self.aliases = {}
 
         self.setFixedWidth(360)
         self.setFrameShape(QFrame.StyledPanel)
@@ -59,12 +60,16 @@ class WatchPane(QFrame):
 
         self._draw_empty()
 
+    def update_aliases(self, aliases: dict):
+        self.aliases = aliases
+
     def _draw_empty(self):
         self.figure.clear()
         ax = self.figure.add_subplot(111)
         if self.symbols:
+            display = [self.aliases.get(s.upper(), s.upper()) for s in self.symbols]
             ax.set_yticks(range(len(self.symbols)))
-            ax.set_yticklabels(self.symbols)
+            ax.set_yticklabels(display)
             ax.set_xlabel("Daily Return %")
             ax.axvline(0, color="gray", linewidth=0.8)
             ax.set_title("Waiting for data...")
@@ -89,7 +94,7 @@ class WatchPane(QFrame):
             ret = info["return_pct"] if info else None
             pairs.append((sym.upper(), ret))
         pairs.sort(key=lambda p: abs(p[1]) if p[1] is not None else -1, reverse=True)
-        labels = [p[0] for p in pairs]
+        labels = [self.aliases.get(p[0], p[0]) for p in pairs]
         returns = [p[1] for p in pairs]
 
         y_pos = list(range(len(labels)))
