@@ -24,6 +24,7 @@ class WatchPane(QFrame):
         self.symbols = list(symbols)
         self.aliases = {}
         self._price_history = {}
+        self.mode = "return"
 
         self.setFrameShape(QFrame.StyledPanel)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -64,6 +65,9 @@ class WatchPane(QFrame):
     def update_aliases(self, aliases: dict):
         self.aliases = aliases
 
+    def set_mode(self, mode: str):
+        self.mode = mode
+
     def _draw_empty(self):
         self.figure.clear()
         ax = self.figure.add_subplot(111)
@@ -71,7 +75,7 @@ class WatchPane(QFrame):
             display = [self.aliases.get(s.upper(), s.upper()) for s in self.symbols]
             ax.set_yticks(range(len(self.symbols)))
             ax.set_yticklabels(display)
-            ax.set_xlabel("Daily Return %")
+            ax.set_xlabel("Daily Return %" if self.mode == "return" else "Sigma Move (σ)")
             ax.axvline(0, color="gray", linewidth=0.8)
             ax.set_title("Waiting for data...")
         else:
@@ -89,11 +93,15 @@ class WatchPane(QFrame):
             self.canvas.draw()
             return
 
+        metric_key = "return_pct" if self.mode == "return" else "sigma_move"
         pairs = []
         for sym in self.symbols:
             info = data.get(sym.upper())
-            ret = info["return_pct"] if info else None
-            pairs.append((sym.upper(), ret))
+            val = info[metric_key] if info else None
+            # fall back to return_pct if sigma not available yet
+            if val is None and self.mode == "sigma" and info:
+                val = info.get("return_pct")
+            pairs.append((sym.upper(), val))
         pairs.sort(key=lambda p: abs(p[1]) if p[1] is not None else -1, reverse=True)
         labels = []
         for p in pairs:
@@ -106,6 +114,7 @@ class WatchPane(QFrame):
             else:
                 labels.append(name)
         returns = [p[1] for p in pairs]
+        is_sigma = self.mode == "sigma" and any(data.get(p[0], {}).get("sigma_move") is not None for p in pairs)
 
         y_pos = list(range(len(labels)))
         colors = []
@@ -120,12 +129,13 @@ class WatchPane(QFrame):
 
         bars = ax.barh(y_pos, display_returns, color=colors, edgecolor="black", linewidth=0.6, height=0.6)
 
+        suffix = chr(0x03c3) if is_sigma else "%"
         for bar, disp_r, orig_r in zip(bars, display_returns, returns):
             if orig_r is None:
                 label = "N/A"
             else:
                 sign = "+" if orig_r >= 0 else ""
-                label = f"{sign}{orig_r:.2f}%"
+                label = f"{sign}{orig_r:.2f}{suffix}"
             x = bar.get_width()
             offset = 0.05 if x >= 0 else -0.05
             ha = "left" if x >= 0 else "right"
@@ -171,7 +181,7 @@ class WatchPane(QFrame):
         ax.set_yticks(y_pos)
         ax.set_yticklabels(labels, fontsize=9)
         ax.axvline(0, color="gray", linewidth=0.8, zorder=0)
-        ax.set_xlabel("Daily Return %", fontsize=8)
+        ax.set_xlabel("Daily Return %" if not is_sigma else f"Sigma Move ({chr(0x03c3)})", fontsize=8)
         ax.tick_params(axis="x", labelsize=8)
         ax.set_title(self.pane_name, fontsize=10)
 

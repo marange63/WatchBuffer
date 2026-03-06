@@ -23,6 +23,7 @@ class MainWindow(QMainWindow):
         self._panes = []
         self._fetcher = None
         self._aliases = {}
+        self._mode = "return"
 
         self._build_toolbar()
         self._build_central()
@@ -42,6 +43,9 @@ class MainWindow(QMainWindow):
         alias_action = QAction("Aliases", self)
         alias_action.triggered.connect(self._edit_aliases)
         tb.addAction(alias_action)
+        self._mode_action = QAction("Mode: % Return", self)
+        self._mode_action.triggered.connect(self._toggle_mode)
+        tb.addAction(self._mode_action)
 
     def _build_central(self):
         self._market_bar = MarketBar()
@@ -82,6 +86,7 @@ class MainWindow(QMainWindow):
         self._panes.append(pane)
         self._layout.addWidget(pane, stretch=1)
         pane.update_aliases(self._aliases)
+        pane.set_mode(self._mode)
         if save:
             self._save()
 
@@ -141,6 +146,7 @@ class MainWindow(QMainWindow):
         self._market_bar.set_aliases(self._aliases)
         for pane in self._panes:
             pane.update_aliases(self._aliases)
+        pane.set_mode(self._mode)
 
     def _edit_aliases(self):
         dlg = AliasEditorDialog(self, self._all_known_symbols(), self._aliases)
@@ -153,6 +159,18 @@ class MainWindow(QMainWindow):
             if hasattr(pane, '_last_data'):
                 pane.update_chart(pane._last_data)
 
+    def _toggle_mode(self):
+        self._mode = "sigma" if self._mode == "return" else "return"
+        label = "Mode: % Return" if self._mode == "return" else "Mode: σ Move"
+        self._mode_action.setText(label)
+        for pane in self._panes:
+            pane.set_mode(self._mode)
+            if hasattr(pane, "_last_data"):
+                pane.update_chart(pane._last_data)
+        self._market_bar.set_mode(self._mode)
+        if hasattr(self, "_last_data"):
+            self._market_bar.refresh(self._last_data)
+
     def _restart_fetcher(self):
         if self._fetcher is not None:
             self._fetcher.stop()
@@ -162,6 +180,7 @@ class MainWindow(QMainWindow):
         self._fetcher.start()
 
     def on_data_ready(self, data):
+        self._last_data = data
         self._market_bar.refresh(data)
         for pane in self._panes:
             pane._last_data = data

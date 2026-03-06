@@ -31,9 +31,13 @@ class MarketBar(QWidget):
 
         layout.addStretch()
         self._aliases = {}
+        self._mode = "return"
 
     def set_aliases(self, aliases: dict):
         self._aliases = aliases
+
+    def set_mode(self, mode: str):
+        self._mode = mode
 
     def refresh(self, data: dict):
         for sym in BENCHMARK_SYMBOLS:
@@ -45,9 +49,17 @@ class MarketBar(QWidget):
                 lbl.setStyleSheet("color: #aaaaaa; font-size: 16px; background-color: #3a3a3a; padding: 4px 10px; border-radius: 4px;")
             else:
                 price = info["price"]
-                ret = info["return_pct"]
-                sign = "+" if ret >= 0 else ""
-                color = "#2ecc71" if ret >= 0 else "#e74c3c"
+                color = "#aaaaaa"
                 price_str = f"{price:,.2f}" if price >= 100 else f"{price:.2f}"
-                lbl.setText(f"{name}  {price_str}  {sign}{ret:.2f}%")
+                if self._mode == "sigma" and info.get("sigma_move") is not None:
+                    val = info["sigma_move"]
+                    sign = "+" if val >= 0 else ""
+                    metric_str = f"{sign}{val:.2f}{chr(0x03c3)}"
+                    color = "#2ecc71" if val >= 0 else "#e74c3c"
+                else:
+                    ret = info["return_pct"]
+                    sign = "+" if ret >= 0 else ""
+                    metric_str = f"{sign}{ret:.2f}%"
+                    color = "#2ecc71" if ret >= 0 else "#e74c3c"
+                lbl.setText(f"{name}  {price_str}  {metric_str}")
                 lbl.setStyleSheet(f"color: {color}; font-size: 16px; font-weight: bold; background-color: #3a3a3a; padding: 4px 10px; border-radius: 4px;")
