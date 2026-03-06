@@ -33,7 +33,7 @@ class DataFetcher(QThread):
                 try:
                     info = tickers.tickers[symbol.upper()].fast_info
                     last_price = info.last_price
-                    prev_close = info.previous_close
+                    prev_close = info.regular_market_previous_close
                     if last_price is None or prev_close is None or prev_close == 0:
                         continue
                     return_pct = (last_price - prev_close) / prev_close * 100
