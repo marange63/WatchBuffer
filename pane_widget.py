@@ -25,9 +25,8 @@ class WatchPane(QFrame):
         self.aliases = {}
         self._prev_prices = {}
 
-        self.setFixedWidth(360)
         self.setFrameShape(QFrame.StyledPanel)
-        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 6, 6, 6)

@@ -80,7 +80,7 @@ class MainWindow(QMainWindow):
         pane.deleted.connect(self._on_pane_deleted)
         pane.symbols_changed.connect(self._on_symbols_changed)
         self._panes.append(pane)
-        self._layout.addWidget(pane)
+        self._layout.addWidget(pane, stretch=1)
         pane.update_aliases(self._aliases)
         if save:
             self._save()
