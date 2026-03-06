@@ -23,7 +23,7 @@ class WatchPane(QFrame):
         self.pane_name = name
         self.symbols = list(symbols)
         self.aliases = {}
-        self._prev_prices = {}
+        self._price_history = {}
 
         self.setFrameShape(QFrame.StyledPanel)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -95,7 +95,16 @@ class WatchPane(QFrame):
             ret = info["return_pct"] if info else None
             pairs.append((sym.upper(), ret))
         pairs.sort(key=lambda p: abs(p[1]) if p[1] is not None else -1, reverse=True)
-        labels = [self.aliases.get(p[0], p[0]) for p in pairs]
+        labels = []
+        for p in pairs:
+            name = self.aliases.get(p[0], p[0])
+            info = data.get(p[0])
+            price = info["price"] if info else None
+            if price is not None:
+                price_str = f"{price:,.2f}" if price >= 100 else f"{price:.2f}"
+                labels.append(f"{name} ({price_str})")
+            else:
+                labels.append(name)
         returns = [p[1] for p in pairs]
 
         y_pos = list(range(len(labels)))
@@ -129,19 +138,34 @@ class WatchPane(QFrame):
         UP = chr(0x25B2)
         DOWN = chr(0x25BC)
         for yp, sym in zip(y_pos, syms_ordered):
-            prev = self._prev_prices.get(sym)
             cur = new_prices.get(sym)
-            if prev is None or cur is None:
-                arrow, acolor = "-", "#888888"
-            elif cur > prev:
-                arrow, acolor = UP, "#2ecc71"
-            elif cur < prev:
-                arrow, acolor = DOWN, "#e74c3c"
+            hist = self._price_history.get(sym, [])
+            full = hist + ([cur] if cur is not None else [])
+            # count consecutive same-direction moves at tail
+            streak, direction = 0, None
+            for i in range(len(full) - 1, 0, -1):
+                d = 1 if full[i] > full[i - 1] else (-1 if full[i] < full[i - 1] else 0)
+                if d == 0:
+                    break
+                if direction is None:
+                    direction, streak = d, 1
+                elif d == direction:
+                    streak += 1
+                else:
+                    break
+            streak = min(streak, 3)
+            if direction == 1:
+                arrow_str, acolor = UP * streak, "#2ecc71"
+            elif direction == -1:
+                arrow_str, acolor = DOWN * streak, "#e74c3c"
             else:
-                arrow, acolor = "-", "#888888"
-            ax.text(1.02, yp, arrow, transform=trans,
+                arrow_str, acolor = "-", "#888888"
+            ax.text(1.02, yp, arrow_str, transform=trans,
                     va="center", ha="left", fontsize=8, color=acolor, clip_on=False)
-        self._prev_prices = {sym: p for sym, p in new_prices.items() if p is not None}
+            # update history (keep last 4 prices)
+            if cur is not None:
+                updated = (hist + [cur])[-4:]
+                self._price_history[sym] = updated
 
         ax.invert_yaxis()
         ax.set_yticks(y_pos)
