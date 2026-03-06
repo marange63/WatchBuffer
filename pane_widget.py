@@ -83,7 +83,7 @@ class WatchPane(QFrame):
             ax.axis("off")
         self.canvas.draw()
 
-    def update_chart(self, data: dict):
+    def update_chart(self, data):
         self.figure.clear()
         ax = self.figure.add_subplot(111)
 
@@ -93,68 +93,67 @@ class WatchPane(QFrame):
             self.canvas.draw()
             return
 
-        metric_key = "return_pct" if self.mode == "return" else "sigma_move"
-        pairs = []
+        use_sigma = self.mode == "sigma"
+
+        rows = []
         for sym in self.symbols:
-            info = data.get(sym.upper())
-            val = info[metric_key] if info else None
-            # fall back to return_pct if sigma not available yet
-            if val is None and self.mode == "sigma" and info:
-                val = info.get("return_pct")
-            pairs.append((sym.upper(), val))
-        pairs.sort(key=lambda p: abs(p[1]) if p[1] is not None else -1, reverse=True)
-        labels = []
-        for p in pairs:
-            name = self.aliases.get(p[0], p[0])
-            info = data.get(p[0])
-            price = info["price"] if info else None
-            if price is not None:
-                price_str = f"{price:,.2f}" if price >= 100 else f"{price:.2f}"
-                labels.append(f"{name} ({price_str})")
+            sym = sym.upper()
+            info = data.get(sym) or {}
+            ret_pct  = info.get("return_pct")
+            sigma_mv = info.get("sigma_move")
+            price    = info.get("price")
+            if use_sigma and sigma_mv is not None:
+                val, has_sigma = sigma_mv, True
+            else:
+                val, has_sigma = ret_pct, False
+            rows.append({"sym": sym, "val": val, "ret": ret_pct,
+                         "sigma": sigma_mv, "price": price, "has_sigma": has_sigma})
+
+        rows.sort(key=lambda r: abs(r["val"]) if r["val"] is not None else -1, reverse=True)
+
+        labels, display_vals, colors = [], [], []
+        for r in rows:
+            name = self.aliases.get(r["sym"], r["sym"])
+            p = r["price"]
+            if p is not None:
+                ps = f"{p:,.2f}" if p >= 100 else f"{p:.2f}"
+                labels.append(f"{name} ({ps})")
             else:
                 labels.append(name)
-        returns = [p[1] for p in pairs]
-        is_sigma = self.mode == "sigma" and any(data.get(p[0], {}).get("sigma_move") is not None for p in pairs)
+            v = r["val"]
+            display_vals.append(v if v is not None else 0.0)
+            colors.append("gray" if v is None else ("#2ecc71" if v >= 0 else "#e74c3c"))
 
-        y_pos = list(range(len(labels)))
-        colors = []
-        display_returns = []
-        for r in returns:
-            if r is None:
-                colors.append("gray")
-                display_returns.append(0.0)
+        y_pos = list(range(len(rows)))
+        ax.barh(y_pos, display_vals, color=colors,
+                edgecolor="black", linewidth=0.6, height=0.6)
+
+        for i, (r, dv) in enumerate(zip(rows, display_vals)):
+            v = r["val"]
+            if v is None:
+                ann = "N/A"
+            elif use_sigma and r["has_sigma"]:
+                sign = "+" if v >= 0 else ""
+                ann = f"{sign}{v:.2f}{SIGMA}"
             else:
-                colors.append("#2ecc71" if r >= 0 else "#e74c3c")
-                display_returns.append(r)
+                ret = r["ret"] or 0
+                sign = "+" if ret >= 0 else ""
+                ann = f"{sign}{ret:.2f}%"
+            ha = "left" if dv >= 0 else "right"
+            offset = 0.05 if dv >= 0 else -0.05
+            ax.text(dv + offset, i, ann,
+                    va="center", ha=ha, fontsize=8, clip_on=False)
 
-        bars = ax.barh(y_pos, display_returns, color=colors, edgecolor="black", linewidth=0.6, height=0.6)
-
-        suffix = chr(0x03c3) if is_sigma else "%"
-        for bar, disp_r, orig_r in zip(bars, display_returns, returns):
-            if orig_r is None:
-                label = "N/A"
-            else:
-                sign = "+" if orig_r >= 0 else ""
-                label = f"{sign}{orig_r:.2f}{suffix}"
-            x = bar.get_width()
-            offset = 0.05 if x >= 0 else -0.05
-            ha = "left" if x >= 0 else "right"
-            ax.text(x + offset, bar.get_y() + bar.get_height() / 2,
-                    label, va="center", ha=ha, fontsize=8, clip_on=False)
-
-        syms_ordered = [p[0] for p in pairs]
-        new_prices = {p[0]: (data.get(p[0]) or {}).get("price") for p in pairs}
         trans = blended_transform_factory(ax.transAxes, ax.transData)
-        UP = chr(0x25B2)
-        DOWN = chr(0x25BC)
-        for yp, sym in zip(y_pos, syms_ordered):
-            cur = new_prices.get(sym)
+        for yp, r in enumerate(rows):
+            sym = r["sym"]
+            cur = r["price"]
             hist = self._price_history.get(sym, [])
             full = hist + ([cur] if cur is not None else [])
-            # count consecutive same-direction moves at tail
             streak, direction = 0, None
             for i in range(len(full) - 1, 0, -1):
-                d = 1 if full[i] > full[i - 1] else (-1 if full[i] < full[i - 1] else 0)
+                d = (1 if full[i] > full[i-1] else
+                     -1 if full[i] < full[i-1] else 0)
                 if d == 0:
                     break
                 if direction is None:
@@ -172,23 +171,19 @@ class WatchPane(QFrame):
                 arrow_str, acolor = "-", "#888888"
             ax.text(1.02, yp, arrow_str, transform=trans,
                     va="center", ha="left", fontsize=8, color=acolor, clip_on=False)
-            # update history (keep last 4 prices)
             if cur is not None:
-                updated = (hist + [cur])[-4:]
-                self._price_history[sym] = updated
+                self._price_history[sym] = (hist + [cur])[-4:]
 
         ax.invert_yaxis()
         ax.set_yticks(y_pos)
         ax.set_yticklabels(labels, fontsize=9)
         ax.axvline(0, color="gray", linewidth=0.8, zorder=0)
-        ax.set_xlabel("Daily Return %" if not is_sigma else f"Sigma Move ({chr(0x03c3)})", fontsize=8)
+        ax.set_xlabel(self._xlabel(), fontsize=8)
         ax.tick_params(axis="x", labelsize=8)
         ax.set_title(self.pane_name, fontsize=10)
-
-        max_abs = max((abs(r) for r in display_returns if r), default=1.0)
+        max_abs = max((abs(v) for v in display_vals if v), default=1.0)
         margin = max_abs * 0.65
         ax.set_xlim(-max_abs - margin, max_abs + margin)
-
         self.canvas.draw()
 
     def _edit_securities(self):
