@@ -146,7 +146,7 @@ class MainWindow(QMainWindow):
         self._market_bar.set_aliases(self._aliases)
         for pane in self._panes:
             pane.update_aliases(self._aliases)
-        pane.set_mode(self._mode)
+            pane.set_mode(self._mode)
 
     def _edit_aliases(self):
         dlg = AliasEditorDialog(self, self._all_known_symbols(), self._aliases)
@@ -166,7 +166,12 @@ class MainWindow(QMainWindow):
         for pane in self._panes:
             pane.set_mode(self._mode)
             if hasattr(pane, "_last_data"):
-                pane.update_chart(pane._last_data)
+                try:
+                    pane.update_chart(pane._last_data)
+                except Exception:
+                    import traceback
+                    print(f"[toggle_mode] {pane.pane_name} error:", flush=True)
+                    traceback.print_exc()
         self._market_bar.set_mode(self._mode)
         if hasattr(self, "_last_data"):
             self._market_bar.refresh(self._last_data)
@@ -181,10 +186,18 @@ class MainWindow(QMainWindow):
 
     def on_data_ready(self, data):
         self._last_data = data
-        self._market_bar.refresh(data)
+        try:
+            self._market_bar.refresh(data)
+        except Exception as e:
+            print(f"[market_bar] refresh error: {e}", flush=True)
         for pane in self._panes:
             pane._last_data = data
-            pane.update_chart(data)
+            try:
+                pane.update_chart(data)
+            except Exception as e:
+                import traceback
+                print(f"[pane {pane.pane_name}] update_chart error:", flush=True)
+                traceback.print_exc()
         ts = datetime.now().strftime("%H:%M:%S")
         self._status_label.setText(f"Last update: {ts}  |  {len(data)} symbols loaded")
 

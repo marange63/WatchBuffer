@@ -12,6 +12,10 @@ from PyQt5.QtCore import Qt, pyqtSignal
 
 from dialogs import PaneNameDialog, SecuritiesEditorDialog
 
+SIGMA = chr(0x03c3)
+UP = chr(0x25b2)
+DOWN = chr(0x25bc)
+
 
 class WatchPane(QFrame):
     deleted = pyqtSignal(str)
@@ -68,6 +72,9 @@ class WatchPane(QFrame):
     def set_mode(self, mode: str):
         self.mode = mode
 
+    def _xlabel(self) -> str:
+        return "Daily Return %" if self.mode == "return" else f"Sigma Move ({SIGMA})"
+
     def _draw_empty(self):
         self.figure.clear()
         ax = self.figure.add_subplot(111)
@@ -75,7 +82,7 @@ class WatchPane(QFrame):
             display = [self.aliases.get(s.upper(), s.upper()) for s in self.symbols]
             ax.set_yticks(range(len(self.symbols)))
             ax.set_yticklabels(display)
-            ax.set_xlabel("Daily Return %" if self.mode == "return" else "Sigma Move (σ)")
+            ax.set_xlabel(self._xlabel())
             ax.axvline(0, color="gray", linewidth=0.8)
             ax.set_title("Waiting for data...")
         else:

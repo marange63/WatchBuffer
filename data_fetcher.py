@@ -1,12 +1,13 @@
 import threading
+import queue
 import numpy as np
 import yfinance as yf
-from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 
-HIST_WINDOW = 252  # trading days used for realized vol (~1 year)
+HIST_WINDOW = 200  # trading days minimum for realized vol calculation
 
 
-class DataFetcher(QThread):
+class DataFetcher(QObject):
     data_ready = pyqtSignal(dict)
 
     def __init__(self, symbols: list, interval: int = 60):
@@ -14,18 +15,42 @@ class DataFetcher(QThread):
         self.symbols = symbols
         self.interval = interval
         self._stop_event = threading.Event()
+        self._queue = queue.Queue()
+        self._thread = None
+        self._timer = QTimer()
+        self._timer.timeout.connect(self._drain_queue)
+        self._timer.start(500)
 
-    def run(self):
+    def start(self):
         self._stop_event.clear()
-        while not self._stop_event.is_set():
-            if self.symbols:
-                data = self._fetch()
-                if data:
-                    self.data_ready.emit(data)
-            self._stop_event.wait(self.interval)
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
 
     def stop(self):
         self._stop_event.set()
+        self._timer.stop()
+
+    def wait(self, msecs: int = 3000):
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=msecs / 1000)
+
+    def _drain_queue(self):
+        while not self._queue.empty():
+            try:
+                data = self._queue.get_nowait()
+                self.data_ready.emit(data)
+            except queue.Empty:
+                break
+
+    def _run(self):
+        while not self._stop_event.is_set():
+            if self.symbols:
+                print(f"[fetcher] fetching {len(self.symbols)} symbols...", flush=True)
+                data = self._fetch()
+                print(f"[fetcher] got {len(data)} results", flush=True)
+                if data:
+                    self._queue.put(data)
+            self._stop_event.wait(self.interval)
 
     def _fetch(self) -> dict:
         result = {}
@@ -39,6 +64,7 @@ class DataFetcher(QThread):
                     last_price = info.last_price
                     prev_close = info.regular_market_previous_close
                     if last_price is None or prev_close is None or prev_close == 0:
+                        print(f"[fetcher] {symbol}: missing price/prev_close", flush=True)
                         continue
                     return_pct = (last_price - prev_close) / prev_close * 100
                     today_log_ret = np.log(last_price / prev_close)
@@ -52,8 +78,9 @@ class DataFetcher(QThread):
                             daily_std = log_rets.std()
                             if daily_std > 0:
                                 sigma_move = today_log_ret / daily_std
-                    except Exception:
-                        pass
+
+                    except Exception as e:
+                        print(f"[fetcher] {symbol} history error: {e}", flush=True)
 
                     result[symbol.upper()] = {
                         "price": last_price,
@@ -61,8 +88,8 @@ class DataFetcher(QThread):
                         "return_pct": return_pct,
                         "sigma_move": sigma_move,
                     }
-                except Exception:
-                    pass
-        except Exception:
-            pass
+                except Exception as e:
+                    print(f"[fetcher] {symbol} error: {e}", flush=True)
+        except Exception as e:
+            print(f"[fetcher] outer error: {e}", flush=True)
         return result
