@@ -2,6 +2,7 @@ import matplotlib
 matplotlib.use("Qt5Agg")
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.transforms import blended_transform_factory
 
 from PyQt5.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -22,6 +23,7 @@ class WatchPane(QFrame):
         self.pane_name = name
         self.symbols = list(symbols)
         self.aliases = {}
+        self._prev_prices = {}
 
         self.setFixedWidth(360)
         self.setFrameShape(QFrame.StyledPanel)
@@ -122,6 +124,26 @@ class WatchPane(QFrame):
             ax.text(x + offset, bar.get_y() + bar.get_height() / 2,
                     label, va="center", ha=ha, fontsize=8, clip_on=False)
 
+        syms_ordered = [p[0] for p in pairs]
+        new_prices = {p[0]: (data.get(p[0]) or {}).get("price") for p in pairs}
+        trans = blended_transform_factory(ax.transAxes, ax.transData)
+        UP = chr(0x25B2)
+        DOWN = chr(0x25BC)
+        for yp, sym in zip(y_pos, syms_ordered):
+            prev = self._prev_prices.get(sym)
+            cur = new_prices.get(sym)
+            if prev is None or cur is None:
+                arrow, acolor = "-", "#888888"
+            elif cur > prev:
+                arrow, acolor = UP, "#2ecc71"
+            elif cur < prev:
+                arrow, acolor = DOWN, "#e74c3c"
+            else:
+                arrow, acolor = "-", "#888888"
+            ax.text(1.02, yp, arrow, transform=trans,
+                    va="center", ha="left", fontsize=8, color=acolor, clip_on=False)
+        self._prev_prices = {sym: p for sym, p in new_prices.items() if p is not None}
+
         ax.invert_yaxis()
         ax.set_yticks(y_pos)
         ax.set_yticklabels(labels, fontsize=9)
@@ -152,7 +174,7 @@ class WatchPane(QFrame):
     def _delete(self):
         reply = QMessageBox.question(
             self, "Delete Pane",
-            f"Delete pane \"{self.pane_name}\"?",
+            "Delete pane "" + self.pane_name + ""?",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
