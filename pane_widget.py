@@ -1,3 +1,4 @@
+import math
 import matplotlib
 matplotlib.use("Qt5Agg")
 from matplotlib.figure import Figure
@@ -188,7 +189,7 @@ class WatchPane(QFrame):
         ax.set_xlabel(self._xlabel(), fontsize=8)
         ax.tick_params(axis="x", labelsize=8)
         ax.set_title(self.pane_name, fontsize=10)
-        max_abs = max((abs(v) for v in display_vals if v), default=1.0)
+        max_abs = max((abs(v) for v in display_vals if math.isfinite(v)), default=1.0)
         margin = max_abs * 0.65
         ax.set_xlim(-max_abs - margin, max_abs + margin)
         self.canvas.draw()
