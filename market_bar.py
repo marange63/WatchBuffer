@@ -2,8 +2,8 @@ from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QFrame
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
-BENCHMARK_SYMBOLS = ["SPY", "QQQ", "IWM", "^DJI"]
-DISPLAY_NAMES = {"SPY": "SPY", "QQQ": "QQQ", "IWM": "IWM", "^DJI": "DJIA"}
+BENCHMARK_SYMBOLS = ["SPY", "QQQ", "IWM", "^DJI", "^TNX"]
+DISPLAY_NAMES = {"SPY": "SPY", "QQQ": "QQQ", "IWM": "IWM", "^DJI": "DJIA", "^TNX": "10Y"}
 
 
 class MarketBar(QWidget):
@@ -47,6 +47,13 @@ class MarketBar(QWidget):
             if info is None:
                 lbl.setText(f"{name}  --")
                 lbl.setStyleSheet("color: #aaaaaa; font-size: 16px; background-color: #3a3a3a; padding: 4px 10px; border-radius: 4px;")
+            elif sym == "^TNX":
+                price = info["price"]
+                bps = (price - info["prev_close"]) * 100
+                sign = "+" if bps >= 0 else ""
+                color = "#e74c3c" if bps >= 0 else "#2ecc71"
+                lbl.setText(f"{name}  {price:.2f}%  {sign}{bps:.1f}bps")
+                lbl.setStyleSheet(f"color: {color}; font-size: 16px; font-weight: bold; background-color: #3a3a3a; padding: 4px 10px; border-radius: 4px;")
             else:
                 price = info["price"]
                 color = "#aaaaaa"
