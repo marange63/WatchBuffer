@@ -1,5 +1,11 @@
 @echo off
-call conda activate WatchBuffer
+call "%USERPROFILE%\miniconda3\Scripts\activate.bat" WatchBuffer 2>nul
+if %ERRORLEVEL% neq 0 (
+    call "%USERPROFILE%\anaconda3\Scripts\activate.bat" WatchBuffer 2>nul
+)
+if %ERRORLEVEL% neq 0 (
+    call conda activate WatchBuffer
+)
 python "%~dp0main.py"
 if %ERRORLEVEL% neq 0 (
     echo.
