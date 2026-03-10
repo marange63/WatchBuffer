@@ -10,10 +10,11 @@ HIST_WINDOW = 200  # trading days minimum for realized vol calculation
 class DataFetcher(QObject):
     data_ready = pyqtSignal(dict)
 
-    def __init__(self, symbols: list, interval: int = 60):
+    def __init__(self, symbols: list, interval: int = 60, vol_period: str = "1y"):
         super().__init__()
         self.symbols = symbols
         self.interval = interval
+        self.vol_period = vol_period
         self._stop_event = threading.Event()
         self._queue = queue.Queue()
         self._thread = None
@@ -71,7 +72,7 @@ class DataFetcher(QObject):
 
                     sigma_move = None
                     try:
-                        hist = ticker.history(period="1y", auto_adjust=True)
+                        hist = ticker.history(period=self.vol_period, auto_adjust=True)
                         if len(hist) >= HIST_WINDOW:
                             closes = hist["Close"]
                             log_rets = np.log(closes / closes.shift(1)).dropna()

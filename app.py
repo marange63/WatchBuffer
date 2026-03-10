@@ -3,7 +3,7 @@ from datetime import datetime
 
 from PyQt5.QtWidgets import (
     QMainWindow, QToolBar, QAction, QScrollArea, QWidget,
-    QHBoxLayout, QVBoxLayout, QLabel
+    QHBoxLayout, QVBoxLayout, QLabel, QComboBox
 )
 from PyQt5.QtCore import Qt
 
@@ -24,6 +24,7 @@ class MainWindow(QMainWindow):
         self._fetcher = None
         self._aliases = {}
         self._mode = "return"
+        self._vol_period = "2y"
 
         self._build_toolbar()
         self._build_central()
@@ -46,6 +47,11 @@ class MainWindow(QMainWindow):
         self._mode_action = QAction("Mode: % Return", self)
         self._mode_action.triggered.connect(self._toggle_mode)
         tb.addAction(self._mode_action)
+        self._vol_combo = QComboBox()
+        self._vol_combo.addItems(["Vol: 1Y", "Vol: 2Y", "Vol: 3Y"])
+        self._vol_combo.setCurrentIndex(1)
+        self._vol_combo.currentIndexChanged.connect(self._on_vol_changed)
+        tb.addWidget(self._vol_combo)
 
     def _build_central(self):
         self._market_bar = MarketBar()
@@ -176,11 +182,15 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_last_data"):
             self._market_bar.refresh(self._last_data)
 
+    def _on_vol_changed(self, index):
+        self._vol_period = ["1y", "2y", "3y"][index]
+        self._restart_fetcher()
+
     def _restart_fetcher(self):
         if self._fetcher is not None:
             self._fetcher.stop()
             self._fetcher.wait(3000)
-        self._fetcher = DataFetcher(self._all_known_symbols(), interval=60)
+        self._fetcher = DataFetcher(self._all_known_symbols(), interval=60, vol_period=self._vol_period)
         self._fetcher.data_ready.connect(self.on_data_ready)
         self._fetcher.start()
 
