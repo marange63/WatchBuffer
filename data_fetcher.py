@@ -16,6 +16,8 @@ class DataFetcher(QObject):
         self.interval = interval
         self.vol_period = vol_period
         self._stop_event = threading.Event()
+        self._pause_event = threading.Event()
+        self._pause_event.set()  # starts unpaused
         self._queue = queue.Queue()
         self._thread = None
         self._timer = QTimer()
@@ -27,8 +29,19 @@ class DataFetcher(QObject):
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
+    def pause(self):
+        self._pause_event.clear()
+
+    def resume(self):
+        self._pause_event.set()
+
+    @property
+    def paused(self) -> bool:
+        return not self._pause_event.is_set()
+
     def stop(self):
         self._stop_event.set()
+        self._pause_event.set()  # unblock thread so it can exit
         self._timer.stop()
 
     def wait(self, msecs: int = 3000):
@@ -45,6 +58,10 @@ class DataFetcher(QObject):
 
     def _run(self):
         while not self._stop_event.is_set():
+            if not self._pause_event.wait(timeout=0.5):
+                continue  # still paused; loop to recheck stop_event
+            if self._stop_event.is_set():
+                return
             if self.symbols:
                 print(f"[fetcher] fetching {len(self.symbols)} symbols...", flush=True)
                 data = self._fetch()

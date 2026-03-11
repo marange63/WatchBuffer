@@ -30,6 +30,7 @@ class WatchPane(QFrame):
         self.aliases = {}
         self._price_history = {}
         self.mode = "return"
+        self.sort_mode = "abs_desc"
 
         self.setFrameShape(QFrame.StyledPanel)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -72,6 +73,9 @@ class WatchPane(QFrame):
 
     def set_mode(self, mode: str):
         self.mode = mode
+
+    def set_sort_mode(self, sort_mode: str):
+        self.sort_mode = sort_mode
 
     def _xlabel(self) -> str:
         return "Daily Return %" if self.mode == "return" else f"Sigma Move ({SIGMA})"
@@ -117,7 +121,10 @@ class WatchPane(QFrame):
             rows.append({"sym": sym, "val": val, "ret": ret_pct,
                          "sigma": sigma_mv, "price": price, "has_sigma": has_sigma})
 
-        rows.sort(key=lambda r: abs(r["val"]) if r["val"] is not None else -1, reverse=True)
+        if self.sort_mode == "desc":
+            rows.sort(key=lambda r: r["val"] if r["val"] is not None else float("-inf"), reverse=True)
+        else:
+            rows.sort(key=lambda r: abs(r["val"]) if r["val"] is not None else -1, reverse=True)
 
         labels, display_vals, colors = [], [], []
         for r in rows:

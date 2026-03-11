@@ -25,6 +25,7 @@ class MainWindow(QMainWindow):
         self._aliases = {}
         self._mode = "return"
         self._vol_period = "2y"
+        self._sort_mode = "abs_desc"
 
         self._build_toolbar()
         self._build_central()
@@ -52,6 +53,14 @@ class MainWindow(QMainWindow):
         self._vol_combo.setCurrentIndex(1)
         self._vol_combo.currentIndexChanged.connect(self._on_vol_changed)
         tb.addWidget(self._vol_combo)
+        self._sort_combo = QComboBox()
+        self._sort_combo.addItems(["Sort: |Δ| Desc", "Sort: Desc"])
+        self._sort_combo.setCurrentIndex(0)
+        self._sort_combo.currentIndexChanged.connect(self._on_sort_changed)
+        tb.addWidget(self._sort_combo)
+        self._pause_action = QAction("Pause", self)
+        self._pause_action.triggered.connect(self._toggle_pause)
+        tb.addAction(self._pause_action)
 
     def _build_central(self):
         self._market_bar = MarketBar()
@@ -93,6 +102,7 @@ class MainWindow(QMainWindow):
         self._layout.addWidget(pane, stretch=1)
         pane.update_aliases(self._aliases)
         pane.set_mode(self._mode)
+        pane.set_sort_mode(self._sort_mode)
         if save:
             self._save()
 
@@ -182,6 +192,27 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_last_data"):
             self._market_bar.refresh(self._last_data)
 
+    def _toggle_pause(self):
+        if self._fetcher is None:
+            return
+        if self._fetcher.paused:
+            self._fetcher.resume()
+            self._pause_action.setText("Pause")
+        else:
+            self._fetcher.pause()
+            self._pause_action.setText("Resume")
+
+    def _on_sort_changed(self, index):
+        self._sort_mode = ["abs_desc", "desc"][index]
+        for pane in self._panes:
+            pane.set_sort_mode(self._sort_mode)
+            if hasattr(pane, "_last_data"):
+                try:
+                    pane.update_chart(pane._last_data)
+                except Exception:
+                    import traceback
+                    traceback.print_exc()
+
     def _on_vol_changed(self, index):
         self._vol_period = ["1y", "2y", "3y"][index]
         self._restart_fetcher()
@@ -193,6 +224,7 @@ class MainWindow(QMainWindow):
         self._fetcher = DataFetcher(self._all_known_symbols(), interval=60, vol_period=self._vol_period)
         self._fetcher.data_ready.connect(self.on_data_ready)
         self._fetcher.start()
+        self._pause_action.setText("Pause")
 
     def on_data_ready(self, data):
         self._last_data = data
