@@ -241,7 +241,10 @@ class MainWindow(QMainWindow):
                 print(f"[pane {pane.pane_name}] update_chart error:", flush=True)
                 traceback.print_exc()
         ts = datetime.now().strftime("%H:%M:%S")
-        self._status_label.setText(f"Last update: {ts}  |  {len(data)} symbols loaded")
+        session = data.get("__session__", "regular")
+        session_label = {"regular": "Regular", "pre": "Pre-market", "post": "Post-market"}.get(session, session)
+        n = sum(1 for k in data if not k.startswith("__"))
+        self._status_label.setText(f"Last update: {ts}  |  {n} symbols  |  {session_label}")
 
     def closeEvent(self, event):
         if self._fetcher is not None:
