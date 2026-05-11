@@ -193,6 +193,9 @@ class WatchPane(QFrame):
         ax.set_yticks(y_pos)
         ax.set_yticklabels(labels, fontsize=9)
         ax.axvline(0, color="gray", linewidth=0.8, zorder=0)
+        if use_sigma:
+            for sx in (-3, -2, -1, 1, 2, 3):
+                ax.axvline(sx, color="gray", linewidth=0.4, linestyle="--", zorder=0)
         ax.set_xlabel(self._xlabel(), fontsize=8)
         ax.tick_params(axis="x", labelsize=8)
         ax.set_title(self.pane_name, fontsize=10)
