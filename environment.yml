@@ -1,0 +1,12 @@
+name: WatchBuffer
+channels:
+  - defaults
+dependencies:
+  - python=3.13
+  - pip
+  - pip:
+      - claudedev-shared==0.1.0
+      - matplotlib==3.10.8
+      - pandas==3.0.1
+      - pyqt5==5.15.11
+      - yfinance==1.2.0
